@@ -48,6 +48,7 @@ bukkitPluginYaml {
     main.set('org.prism_mc.prism.paper.loader.PrismPaperPluginLoader')
     apiVersion.set(project.property('paper-api-version'))
     website.set(project.property('website'))
+    foliaSupported.set(true)
     authors.add("viveleroi")
     depend.add("NBTAPI")
     softDepend.add("WorldEdit")

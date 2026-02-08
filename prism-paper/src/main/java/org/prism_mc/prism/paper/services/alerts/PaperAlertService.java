@@ -27,6 +27,7 @@ import com.google.inject.Singleton;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
@@ -47,6 +48,7 @@ import org.prism_mc.prism.loader.services.configuration.alerts.AlertConfiguratio
 import org.prism_mc.prism.loader.services.configuration.alerts.BlockAlertConfiguration;
 import org.prism_mc.prism.loader.services.configuration.cache.CacheConfiguration;
 import org.prism_mc.prism.loader.services.logging.LoggingService;
+import org.prism_mc.prism.paper.PrismPaper;
 import org.prism_mc.prism.paper.actions.types.PaperActionTypeRegistry;
 import org.prism_mc.prism.paper.api.activities.PaperActivityQuery;
 import org.prism_mc.prism.paper.services.lookup.LookupService;
@@ -225,8 +227,18 @@ public class PaperAlertService {
                 return;
             }
 
-            VeinScanner veinScanner = new VeinScanner(blockState, alert.materialTag(), alert.config().maxScanCount());
-            List<Location> vein = veinScanner.scan();
+            // We can't call Block#getType async
+            CompletableFuture<List<Location>> future = new CompletableFuture<>();
+            Bukkit.getRegionScheduler().execute(PrismPaper.instance().loaderPlugin(), blockState.getLocation(), () -> {
+                try {
+                    VeinScanner veinScanner = new VeinScanner(blockState, alert.materialTag(), alert.config().maxScanCount());
+                    List<Location> vein = veinScanner.scan();
+                    future.complete(vein);
+                } catch (Throwable ex) {
+                    future.completeExceptionally(ex);
+                }
+            });
+            List<Location> vein = future.join();
 
             // Cache the vein locations
             for (var blockLocation : vein) {

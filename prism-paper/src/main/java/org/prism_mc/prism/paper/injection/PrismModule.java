@@ -69,7 +69,6 @@ import org.prism_mc.prism.loader.storage.StorageType;
 import org.prism_mc.prism.paper.PrismPaper;
 import org.prism_mc.prism.paper.actions.types.PaperActionTypeRegistry;
 import org.prism_mc.prism.paper.integrations.worldedit.WorldEditIntegration;
-import org.prism_mc.prism.paper.providers.TaskChainProvider;
 import org.prism_mc.prism.paper.services.alerts.BlockBreakAlertData;
 import org.prism_mc.prism.paper.services.alerts.ItemAlertData;
 import org.prism_mc.prism.paper.services.alerts.PaperAlertService;
@@ -241,9 +240,6 @@ public class PrismModule extends AbstractModule {
     public void configure() {
         // Base
         bind(Path.class).toInstance(dataPath);
-
-        // Taskchain
-        bind(TaskChainProvider.class).toInstance(new TaskChainProvider(prism.loader()));
 
         // Actions
         bind(ActionTypeRegistry.class).to(PaperActionTypeRegistry.class).in(Singleton.class);

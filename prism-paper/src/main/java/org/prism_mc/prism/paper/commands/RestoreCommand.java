@@ -26,11 +26,15 @@ import dev.triumphteam.cmd.core.annotations.Command;
 import dev.triumphteam.cmd.core.annotations.CommandFlags;
 import dev.triumphteam.cmd.core.annotations.NamedArguments;
 import dev.triumphteam.cmd.core.argument.keyed.Arguments;
+import java.util.List;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
+import org.prism_mc.prism.api.activities.Activity;
 import org.prism_mc.prism.api.activities.ActivityQuery;
 import org.prism_mc.prism.api.storage.StorageAdapter;
+import org.prism_mc.prism.api.util.Coordinate;
 import org.prism_mc.prism.loader.services.logging.LoggingService;
-import org.prism_mc.prism.paper.providers.TaskChainProvider;
+import org.prism_mc.prism.paper.PrismPaper;
 import org.prism_mc.prism.paper.services.messages.MessageService;
 import org.prism_mc.prism.paper.services.modifications.PaperModificationQueueService;
 import org.prism_mc.prism.paper.services.query.QueryService;
@@ -59,11 +63,6 @@ public class RestoreCommand {
     private final QueryService queryService;
 
     /**
-     * The task chain provider.
-     */
-    private final TaskChainProvider taskChainProvider;
-
-    /**
      * The logging service.
      */
     private final LoggingService loggingService;
@@ -75,7 +74,6 @@ public class RestoreCommand {
      * @param messageService The message service
      * @param modificationQueueService The modification queue service
      * @param queryService The query service
-     * @param taskChainProvider The task chain provider
      * @param loggingService The logging service
      */
     @Inject
@@ -84,14 +82,12 @@ public class RestoreCommand {
         MessageService messageService,
         PaperModificationQueueService modificationQueueService,
         QueryService queryService,
-        TaskChainProvider taskChainProvider,
         LoggingService loggingService
     ) {
         this.storageAdapter = storageAdapter;
         this.messageService = messageService;
         this.modificationQueueService = modificationQueueService;
         this.queryService = queryService;
-        this.taskChainProvider = taskChainProvider;
         this.loggingService = loggingService;
     }
 
@@ -115,23 +111,21 @@ public class RestoreCommand {
         var builder = queryService.queryFromArguments(sender, arguments);
         if (builder.isPresent()) {
             final ActivityQuery query = builder.get().restore().build();
-            taskChainProvider
-                .newChain()
-                .asyncFirst(() -> {
+            Bukkit.getServer()
+                .getAsyncScheduler()
+                .runNow(PrismPaper.instance().loaderPlugin(), unused -> {
+                    List<Activity> modifications;
+
                     try {
-                        return storageAdapter.queryActivities(query);
+                        modifications = storageAdapter.queryActivities(query);
                     } catch (Exception e) {
                         messageService.errorQueryExec(sender);
                         loggingService.handleException(e);
+                        return;
                     }
 
-                    return null;
-                })
-                .abortIfNull()
-                .syncLast(modifications -> {
                     if (modifications.isEmpty()) {
                         messageService.noResults(sender);
-
                         return;
                     }
 
@@ -144,9 +138,14 @@ public class RestoreCommand {
                         .applyFlagsToModificationRuleset(arguments)
                         .build();
 
-                    modificationQueueService.newRestoreQueue(modificationRuleset, sender, query, modifications).apply();
-                })
-                .execute();
+                    Coordinate ref = query.referenceCoordinate();
+                    Bukkit.getServer().getRegionScheduler().execute(
+                        PrismPaper.instance().loaderPlugin(),
+                        Bukkit.getWorld(query.worldUuid()),
+                        ref.intX() >> 4,
+                        ref.intZ() >> 4,
+                        () -> modificationQueueService.newRestoreQueue(modificationRuleset, sender, query, modifications).apply());
+                });
         }
     }
 }

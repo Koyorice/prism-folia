@@ -22,10 +22,11 @@ package org.prism_mc.prism.paper.services.recording;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
-import org.bukkit.scheduler.BukkitTask;
 import org.prism_mc.prism.api.activities.Activity;
 import org.prism_mc.prism.api.services.recording.RecordingService;
 import org.prism_mc.prism.loader.services.configuration.ConfigurationService;
@@ -65,7 +66,7 @@ public class PaperRecordingService implements RecordingService {
     /**
      * Cache the scheduled task.
      */
-    private BukkitTask task;
+    private ScheduledTask task;
 
     /**
      * The drain mode.
@@ -164,8 +165,8 @@ public class PaperRecordingService implements RecordingService {
 
         if (recordMode.equals(RecordMode.NORMAL)) {
             task = Bukkit.getServer()
-                .getScheduler()
-                .runTaskLaterAsynchronously(PrismPaper.instance().loaderPlugin(), recordingTask, delay);
+                .getAsyncScheduler()
+                .runDelayed(PrismPaper.instance().loaderPlugin(), unused -> recordingTask.run(), delay * 50L, TimeUnit.MILLISECONDS);
         }
     }
 

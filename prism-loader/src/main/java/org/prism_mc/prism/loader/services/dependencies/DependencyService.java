@@ -174,18 +174,13 @@ public class DependencyService {
 
     /**
      * Load all dependencies (adds global/storage automatically).
-     *
-     * @param platformDependencies The platform-specific dependencies
      */
-    public void loadAllDependencies(Set<Dependency> platformDependencies) {
+    public void loadAllDependencies() {
         Set<Dependency> global = this.registry.globalDependencies();
         EnumSet<Dependency> all = EnumSet.copyOf(global);
 
         // Add storage dependencies
         all.addAll(this.registry.storageDependencies(configurationService.storageConfig().primaryStorageType()));
-
-        // Add platform dependencies
-        all.addAll(platformDependencies);
 
         loadDependencies(all);
     }

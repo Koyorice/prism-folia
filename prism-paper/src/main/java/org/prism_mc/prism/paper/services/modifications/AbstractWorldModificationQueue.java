@@ -20,6 +20,7 @@
 
 package org.prism_mc.prism.paper.services.modifications;
 
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -30,7 +31,6 @@ import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.BoundingBox;
 import org.prism_mc.prism.api.activities.Activity;
 import org.prism_mc.prism.api.activities.ActivityQuery;
@@ -40,6 +40,7 @@ import org.prism_mc.prism.api.services.modifications.ModificationQueueResult;
 import org.prism_mc.prism.api.services.modifications.ModificationResult;
 import org.prism_mc.prism.api.services.modifications.ModificationResultStatus;
 import org.prism_mc.prism.api.services.modifications.ModificationRuleset;
+import org.prism_mc.prism.api.util.Coordinate;
 import org.prism_mc.prism.loader.services.logging.LoggingService;
 import org.prism_mc.prism.paper.PrismPaper;
 import org.prism_mc.prism.paper.utils.BlockUtils;
@@ -85,7 +86,7 @@ public abstract class AbstractWorldModificationQueue implements ModificationQueu
     /**
      * Cache the task id.
      */
-    protected int taskId;
+    protected ScheduledTask task;
 
     /**
      * Count how many were read from the queue.
@@ -272,12 +273,15 @@ public abstract class AbstractWorldModificationQueue implements ModificationQueu
             }
 
             // Schedule a new sync task
-            JavaPlugin plugin = PrismPaper.instance().loaderPlugin();
-            taskId = Bukkit.getServer()
-                .getScheduler()
-                .scheduleSyncRepeatingTask(
-                    plugin,
-                    () -> {
+            Coordinate ref = query.referenceCoordinate();
+            task = Bukkit.getServer()
+                .getRegionScheduler()
+                .runAtFixedRate(
+                    PrismPaper.instance().loaderPlugin(),
+                    Bukkit.getWorld(query.worldUuid()),
+                    ref.intX() >> 4,
+                    ref.intZ() >> 4,
+                    task -> {
                         loggingService.debug("New modification run beginning...");
 
                         int iterationCount = 0;
@@ -340,7 +344,7 @@ public abstract class AbstractWorldModificationQueue implements ModificationQueu
                             loggingService.debug("Modification queue fully processed, finishing up.");
 
                             // Cancel the repeating task
-                            Bukkit.getServer().getScheduler().cancelTask(taskId);
+                            task.cancel();
 
                             // Post process
                             postProcess(builder);
@@ -357,7 +361,7 @@ public abstract class AbstractWorldModificationQueue implements ModificationQueu
                             onEnd(result);
                         }
                     },
-                    0,
+                    1L,
                     modificationRuleset.taskDelay()
                 );
         }
@@ -365,7 +369,7 @@ public abstract class AbstractWorldModificationQueue implements ModificationQueu
 
     @Override
     public void destroy() {
-        Bukkit.getServer().getScheduler().cancelTask(taskId);
+        task.cancel();
     }
 
     /**

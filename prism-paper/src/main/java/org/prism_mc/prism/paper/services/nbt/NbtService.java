@@ -28,9 +28,8 @@ import de.tr7zw.nbtapi.NBT;
 import de.tr7zw.nbtapi.iface.ReadWriteNBT;
 import de.tr7zw.nbtapi.iface.ReadableNBT;
 import java.util.function.Consumer;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntitySnapshot;
+import org.bukkit.entity.EntityType;
 import org.prism_mc.prism.core.services.cache.CacheService;
 import org.prism_mc.prism.loader.services.configuration.ConfigurationService;
 import org.prism_mc.prism.loader.services.configuration.cache.CacheConfiguration;
@@ -43,7 +42,7 @@ public class NbtService {
     /**
      * Cache of default entity nbt data.
      */
-    private final Cache<String, ReadableNBT> entityNbtDefaults;
+    private final Cache<EntityType, ReadableNBT> entityNbtDefaults;
 
     /**
      * The logging service.
@@ -112,27 +111,28 @@ public class NbtService {
      * @param consumer The consumer
      */
     public void processEntityNbt(Entity entity, Consumer<ReadableNBT> consumer) {
-        String key = entity.getType().getKey().getKey();
+        EntityType type = entity.getType();
+        if (type == EntityType.UNKNOWN) return;
 
-        var cachedDefaultNbt = entityNbtDefaults.getIfPresent(key);
+        Class<? extends Entity> clazz = type.getEntityClass();
+        if (clazz == null) return;
+
+        var cachedDefaultNbt = entityNbtDefaults.getIfPresent(type);
         if (cachedDefaultNbt != null) {
             trimEntityNbt(entity, cachedDefaultNbt, consumer);
         } else {
-            EntitySnapshot entitySnapshot = Bukkit.getEntityFactory()
-                .createEntitySnapshot(String.format("{id:\"%s\"}", key));
-
-            Entity dummyEntity = entitySnapshot.createEntity(Bukkit.getWorlds().getFirst());
+            Entity dummyEntity = entity.getWorld().createEntity(entity.getLocation(), clazz);
             NBT.get(dummyEntity, defaultNbt -> {
                 // Create a nbt container not attached to the entity so we can reuse it
                 ReadWriteNBT cacheNbt = NBT.createNBTObject();
                 cacheNbt.mergeCompound(defaultNbt);
 
                 // Cache the default nbt for this entity
-                entityNbtDefaults.put(key, cacheNbt);
+                entityNbtDefaults.put(type, cacheNbt);
 
                 loggingService.debug(
                     "Caching default entity nbt for {0}. Byte length: {1}",
-                    key,
+                    type,
                     StringUtils.getUtf8Mb4Length(defaultNbt.toString())
                 );
 
