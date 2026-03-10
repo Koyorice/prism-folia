@@ -31,9 +31,7 @@ import dev.triumphteam.cmd.core.extension.CommandOptions;
 import dev.triumphteam.cmd.core.suggestion.SuggestionKey;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import org.bukkit.Bukkit;
@@ -52,7 +50,6 @@ import org.prism_mc.prism.api.actions.types.ActionTypeRegistry;
 import org.prism_mc.prism.api.services.recording.RecordingService;
 import org.prism_mc.prism.api.storage.StorageAdapter;
 import org.prism_mc.prism.loader.services.configuration.ConfigurationService;
-import org.prism_mc.prism.loader.services.dependencies.Dependency;
 import org.prism_mc.prism.loader.services.dependencies.DependencyService;
 import org.prism_mc.prism.loader.services.dependencies.loader.PluginLoader;
 import org.prism_mc.prism.loader.services.scheduler.ThreadPoolScheduler;
@@ -202,15 +199,6 @@ public class PrismPaper implements Prism {
     }
 
     /**
-     * Get all platform dependencies.
-     *
-     * @return The platform dependencies
-     */
-    protected Set<Dependency> platformDependencies() {
-        return EnumSet.of(Dependency.TASKCHAIN_BUKKIT, Dependency.TASKCHAIN_CORE);
-    }
-
-    /**
      * On enable.
      */
     public void onEnable() {
@@ -221,7 +209,7 @@ public class PrismPaper implements Prism {
             bootstrap.classPathAppender(),
             threadPoolScheduler
         );
-        dependencyService.loadAllDependencies(platformDependencies());
+        dependencyService.loadAllDependencies();
 
         serializerVersion = (short) DataFixerUtil.getCurrentVersion();
         bootstrap.loggingService().info("Serializer version: {0}", serializerVersion);

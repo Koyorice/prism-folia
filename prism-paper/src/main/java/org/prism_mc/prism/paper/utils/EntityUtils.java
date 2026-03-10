@@ -67,10 +67,10 @@ public class EntityUtils {
 
             if (destination != null) {
                 // Teleport to the destination
-                entity.teleport(destination);
+                entity.teleportAsync(destination);
             } else {
                 // Teleport to the highest block
-                entity.teleport(
+                entity.teleportAsync(
                     world
                         .getHighestBlockAt(entity.getLocation().getBlockX(), entity.getLocation().getBlockZ())
                         .getRelative(BlockFace.UP)

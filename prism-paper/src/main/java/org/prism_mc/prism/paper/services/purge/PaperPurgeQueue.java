@@ -20,7 +20,6 @@
 
 package org.prism_mc.prism.paper.services.purge;
 
-import co.aikar.taskchain.TaskChain;
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import java.util.Collections;
@@ -29,6 +28,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.prism_mc.prism.api.activities.ActivityQuery;
 import org.prism_mc.prism.api.services.purges.PurgeCycleResult;
 import org.prism_mc.prism.api.services.purges.PurgeQueue;
@@ -37,7 +37,7 @@ import org.prism_mc.prism.api.storage.StorageAdapter;
 import org.prism_mc.prism.api.util.Pair;
 import org.prism_mc.prism.loader.services.configuration.ConfigurationService;
 import org.prism_mc.prism.loader.services.logging.LoggingService;
-import org.prism_mc.prism.paper.providers.TaskChainProvider;
+import org.prism_mc.prism.paper.PrismPaper;
 
 public class PaperPurgeQueue implements PurgeQueue {
 
@@ -50,16 +50,6 @@ public class PaperPurgeQueue implements PurgeQueue {
      * The logging service.
      */
     private final LoggingService loggingService;
-
-    /**
-     * The current task chain.
-     */
-    private TaskChain<?> taskChain;
-
-    /**
-     * The task chain provider.
-     */
-    private final TaskChainProvider taskChainProvider;
 
     /**
      * The storage adapter.
@@ -97,7 +87,6 @@ public class PaperPurgeQueue implements PurgeQueue {
      *
      * @param configurationService The configuration service
      * @param loggingService The logging service
-     * @param taskChainProvider The task chain provider
      * @param storageAdapter The storage adapter
      * @param onCycle The cycle callback
      * @param onEnd The end callback
@@ -106,14 +95,12 @@ public class PaperPurgeQueue implements PurgeQueue {
     public PaperPurgeQueue(
         ConfigurationService configurationService,
         LoggingService loggingService,
-        TaskChainProvider taskChainProvider,
         StorageAdapter storageAdapter,
         @Assisted Consumer<PurgeCycleResult> onCycle,
         @Assisted Consumer<PurgeResult> onEnd
     ) {
         this.configurationService = configurationService;
         this.loggingService = loggingService;
-        this.taskChainProvider = taskChainProvider;
         this.storageAdapter = storageAdapter;
         this.onCycle = onCycle;
         this.onEnd = onEnd;
@@ -128,24 +115,20 @@ public class PaperPurgeQueue implements PurgeQueue {
     public void start() {
         running = true;
 
-        taskChain = taskChainProvider
-            .newChain()
-            .asyncFirst(() -> {
+        Bukkit.getServer()
+            .getAsyncScheduler()
+            .runNow(PrismPaper.instance().loaderPlugin(), unused -> {
                 Pair<Integer, Integer> keys = storageAdapter.getActivitiesPkBounds(purgeQueue.getFirst());
 
                 loggingService.debug("Absolute purge lower/bound primary keys: {0}, {1}", keys.key(), keys.value());
 
-                return keys;
-            })
-            .syncLast(keys -> executeNext(keys.key(), keys.value()));
-
-        taskChain.execute();
+                executeNext(keys.key(), keys.value());
+            });
     }
 
     @Override
     public void stop() {
         running = false;
-        taskChain = null;
     }
 
     /**
@@ -166,32 +149,20 @@ public class PaperPurgeQueue implements PurgeQueue {
 
             onEnd.accept(PurgeResult.builder().deleted(deleted).build());
 
-            taskChain = null;
-
             return;
         }
 
-        Long cycleDuration = null;
-        TimeUnit cycleTimeUnit = null;
+        var cycleDelay = configurationService.prismConfig().purges().cycleDelay();
 
-        if (configurationService.prismConfig().purges().cycleDelay() != null) {
-            cycleDuration = configurationService.prismConfig().purges().cycleDelay().duration();
-            cycleTimeUnit = configurationService.prismConfig().purges().cycleDelay().timeUnit();
-        }
+        long cycleDuration = (cycleDelay != null && cycleDelay.duration() != null) ? cycleDelay.duration() : 2L;
 
-        if (cycleDuration == null) {
-            cycleDuration = 2L;
-        }
-
-        if (cycleTimeUnit == null) {
-            cycleTimeUnit = TimeUnit.SECONDS;
-        }
+        TimeUnit cycleTimeUnit = (cycleDelay != null && cycleDelay.timeUnit() != null) ? cycleDelay.timeUnit() : TimeUnit.SECONDS;
 
         // Get the query
         ActivityQuery query = purgeQueue.get(0);
-        taskChainProvider
-            .newChain()
-            .asyncFirst(() -> {
+        Bukkit.getServer()
+            .getAsyncScheduler()
+            .runNow(PrismPaper.instance().loaderPlugin(), unused -> {
                 loggingService.debug("Executing next purge for query {0}...", query);
 
                 /*
@@ -235,12 +206,14 @@ public class PaperPurgeQueue implements PurgeQueue {
 
                 loggingService.debug("Scheduling next cycle (and any configured delay)");
 
-                return nextCycleMinPrimaryKey;
-            })
-            .delay(cycleDuration.intValue(), cycleTimeUnit)
-            .syncLast(nextCycleMinPrimaryKey -> {
-                this.executeNext(nextCycleMinPrimaryKey, maxPrimaryKey);
-            })
-            .execute();
+                Bukkit.getServer()
+                    .getAsyncScheduler()
+                    .runDelayed(
+                        PrismPaper.instance().loaderPlugin(),
+                        unused1 -> this.executeNext(nextCycleMinPrimaryKey, maxPrimaryKey),
+                        cycleDuration,
+                        cycleTimeUnit
+                    );
+            });
     }
 }

@@ -27,8 +27,9 @@ import dev.triumphteam.cmd.core.annotations.NamedArguments;
 import dev.triumphteam.cmd.core.argument.keyed.Arguments;
 import java.util.List;
 import java.util.Optional;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.prism_mc.prism.api.actions.Action;
+import org.prism_mc.prism.api.activities.Activity;
 import org.prism_mc.prism.api.activities.ActivityQuery;
 import org.prism_mc.prism.api.services.modifications.ModificationQueue;
 import org.prism_mc.prism.api.services.modifications.ModificationRuleset;
@@ -36,7 +37,7 @@ import org.prism_mc.prism.api.services.modifications.Previewable;
 import org.prism_mc.prism.api.storage.StorageAdapter;
 import org.prism_mc.prism.loader.services.configuration.ConfigurationService;
 import org.prism_mc.prism.loader.services.logging.LoggingService;
-import org.prism_mc.prism.paper.providers.TaskChainProvider;
+import org.prism_mc.prism.paper.PrismPaper;
 import org.prism_mc.prism.paper.services.messages.MessageService;
 import org.prism_mc.prism.paper.services.modifications.PaperModificationQueueService;
 import org.prism_mc.prism.paper.services.modifications.PaperRestore;
@@ -72,11 +73,6 @@ public class PreviewCommand {
     private final QueryService queryService;
 
     /**
-     * The task chain provider.
-     */
-    private final TaskChainProvider taskChainProvider;
-
-    /**
      * The logging service.
      */
     private final LoggingService loggingService;
@@ -89,7 +85,6 @@ public class PreviewCommand {
      * @param messageService The message service
      * @param modificationQueueService The modification queue service
      * @param queryService The query service
-     * @param taskChainProvider The taskchain provider
      * @param loggingService The logging service
      */
     @Inject
@@ -99,7 +94,6 @@ public class PreviewCommand {
         MessageService messageService,
         PaperModificationQueueService modificationQueueService,
         QueryService queryService,
-        TaskChainProvider taskChainProvider,
         LoggingService loggingService
     ) {
         this.configurationService = configurationService;
@@ -107,7 +101,6 @@ public class PreviewCommand {
         this.messageService = messageService;
         this.modificationQueueService = modificationQueueService;
         this.queryService = queryService;
-        this.taskChainProvider = taskChainProvider;
         this.loggingService = loggingService;
     }
 
@@ -227,24 +220,22 @@ public class PreviewCommand {
             return;
         }
 
-        taskChainProvider
-            .newChain()
-            .asyncFirst(() -> {
+        Bukkit.getServer()
+            .getAsyncScheduler()
+            .runNow(PrismPaper.instance().loaderPlugin(), unused -> {
+                List<Activity> results;
+
                 try {
-                    return storageAdapter.queryActivities(query);
+                    results = storageAdapter.queryActivities(query);
                 } catch (Exception e) {
                     messageService.errorQueryExec(player);
                     loggingService.handleException(e);
+                    return;
                 }
 
-                return null;
-            })
-            .abortIfNull()
-            .<List<Action>>sync(results -> {
                 if (results.isEmpty()) {
                     messageService.noResults(player);
-
-                    return null;
+                    return;
                 }
 
                 ModificationQueue queue = modificationQueueService.newQueue(
@@ -254,14 +245,12 @@ public class PreviewCommand {
                     query,
                     results
                 );
+
                 if (queue instanceof Previewable previewable) {
                     previewable.preview();
                 } else {
                     messageService.errorNotPreviewable(player);
                 }
-
-                return null;
-            })
-            .execute();
+            });
     }
 }

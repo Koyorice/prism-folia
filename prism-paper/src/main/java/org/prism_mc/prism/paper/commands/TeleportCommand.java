@@ -30,7 +30,6 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.prism_mc.prism.api.activities.ActivityQuery;
-import org.prism_mc.prism.paper.PrismPaper;
 import org.prism_mc.prism.paper.services.lookup.LookupService;
 import org.prism_mc.prism.paper.services.messages.MessageService;
 
@@ -83,18 +82,14 @@ public class TeleportCommand {
                         messageService.teleportingToActivity(player, activity);
 
                         World world = Bukkit.getServer().getWorld(activity.world().key());
-                        Bukkit.getServer()
-                            .getScheduler()
-                            .runTask(PrismPaper.instance().loaderPlugin(), () -> {
-                                player.teleport(
-                                    new Location(
-                                        world,
-                                        activity.coordinate().intX(),
-                                        activity.coordinate().intY(),
-                                        activity.coordinate().intZ()
-                                    )
-                                );
-                            });
+                        player.teleportAsync(
+                            new Location(
+                                world,
+                                activity.coordinate().intX(),
+                                activity.coordinate().intY(),
+                                activity.coordinate().intZ()
+                            )
+                        );
                     }
                 });
             }
@@ -130,7 +125,7 @@ public class TeleportCommand {
                     messageService.teleportingTo(player, worldName, x, y, z);
                 }
 
-                player.teleport(new Location(world, x, y, z));
+                player.teleportAsync(new Location(world, x, y, z));
             }
         }
     }
